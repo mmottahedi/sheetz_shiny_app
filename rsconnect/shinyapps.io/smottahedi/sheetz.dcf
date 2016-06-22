@@ -1,0 +1,10 @@
+name: sheetz
+account: smottahedi
+server: shinyapps.io
+appId: 110114
+bundleId: 486818
+url: https://smottahedi.shinyapps.io/sheetz/
+when: 1466628905.81504
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: Global.r|www/df_with_avg_temp.csv|www/ggplot_smooth_func.R
