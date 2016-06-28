@@ -42,37 +42,48 @@ ui <- dashboardPage(
 #Regression on monthly EUI tab----------
              tabItem(tabName = "regression",
                     fluidRow(
-                        box(plotOutput("regressionPlot")),
+                        box(plotOutput("regressionPlot"), collapsible = T,
+                            width = 12, height = 500),
                         box(title = "Store",
                            selectInput(inputId = "store_num",
                                        label = "Store number:",
                                        choices = stores, selected = 3,
-                                       multiple = T)),
+                                       multiple = T), collapsible = T),
+                        box(title = "Date Slider",
+                            sliderInput(inputId = "date_slider",
+                                        label = "# months:", min = 1, max = 36,
+                                        value = 12)),
                         box(title = "Date Range",
                             dateRangeInput(inputId = "date_range",
-                                           label = 'Date Range' ,
+                                           label = 'Date Range:' ,
                                            start = "2014-12-01",
-                                           end = "2016-06-06")))),
+                                           end = "2016-06-06"),
+                            collapsible = T),
+                        box(title = "Show Regression Equation",
+                            checkboxInput(inputId = "eq_checkbox",
+                                           label = 'Regression Equation',
+                                          value = TRUE),
+                            collapsible = T))),
 
 #Regression on monthly bill cost tab-----------------------------------
             tabItem(tabName = "Cost",
                 fluidRow(
-                    box(plotOutput("costplot")),
+                    box(plotOutput("costplot"), collapsible = T, width = 12),
                     box(title = "Store",
                         selectInput(inputId = "cost_store_num",
                                     label = "Store number:",
                                     choices = stores, selected = 3,
-                                    multiple = T)),
+                                    multiple = T), collapsible = T, width = 12),
                     box(title = "Date Range",
                         dateRangeInput(inputId = "cost_date_range",
                                        label = 'Date Range' ,
                                        start = "2014-12-01",
-                                       end = "2016-06-06")))),
+                                       end = "2016-06-06"), collapsible = T, width = 12))),
 
 #PCA Native USE TAB--------------------------------------------------
             tabItem(tabName = "pca_native",
                     fluidRow(
-                        box(plotOutput("pca_cost")),
+                        box(plotOutput("pca_cost"), collapsible = T, width = 12),
                         box(title = 'Color code',
                             selectInput(inputId = "select_color",
                                         label = "column",
@@ -81,19 +92,19 @@ ui <- dashboardPage(
 #PCA & kmeans tab---------------------------------
             tabItem(tabName = "kmeans",
                     fluidRow(
-                        tabBox(title = "X", id = "tab1",
+                        tabBox(title = "X", id = "tab1", width = 12,
                                tabPanel("Annual kWh",
-                                        selectInput(inputId = "kmeans_num_1",
-                                                    label = "Number of Clusters:",
-                                                    choices = c(1,2,3)),
+                                        sliderInput(inputId = "kmeans_num_1",
+                                                    label = "number of clusters",
+                                                    min = 1, max = 3, value = 2),
                                         plotOutput("kwh_kmeans"),
                                         plotOutput("sum_stat_1"),
                                         plotOutput("sum_stat_2"),
                                         plotOutput("sum_stat_3")),
                                tabPanel("Annual Cost",
-                                        selectInput(inputId = "kmeans_num_2",
-                                                    label = "Number of Clusters:",
-                                                    choices = c(1,2,3)),
+                                        sliderInput(inputId = "kmeans_num_2",
+                                                    label = "number of clusters",
+                                                    min = 1, max = 3, value = 2),
                                         plotOutput("cost_kmeans"),
                                         plotOutput("sum_stat_4"),
                                         plotOutput("sum_stat_5"),
@@ -113,23 +124,37 @@ server <- function(input, output){
     temp <- df %>%
                 filter(Store %in% store,
                        Start.Date > date_range[1] & Start.Date < date_range[2],
-                       NaturalGas==FALSE , car_wash == FALSE, Native.Use != 0, Unit=='kWh') %>%
+                       car_wash == FALSE, Native.Use != 0, Unit == 'kWh') %>%
                 group_by(Store) %>%
                 mutate(monthly_eui  = Native.Use / (Days * Size )) %>%
                 mutate(OPEN= year(OPEN)) %>%
                 mutate(month= month(Start.Date)) %>%
                 mutate(year= month(Start.Date)) %>%
-                arrange(desc(Start.Date))
+                arrange(desc(Start.Date)) %>%
+                slice(1:input$date_slider)
 
 
+    options(repr.plot.width=9, repr.plot.height=9)
 
+    if (input$eq_checkbox == TRUE){
     p <- ggplot(data = temp, aes(x=temp_mean, y=monthly_eui, color = factor(Store)))+
                                 geom_point(alpha = 0.7) +
-                                facet_wrap(~Group) +
+                                facet_wrap(~ Group) +
+                                theme_minimal() +
                                 theme(legend.position = 'bottom') +
                                 geom_smooth(method = 'lm', formula = y ~ poly(x, 2), se=F) +
                                 stat_smooth_func(geom = "text",method="lm",formula = y ~ poly(x ,2),hjust=0, vjust=0, parse=T) +
-                                ylab("Monthly Average (kWh)") + xlab("Average Temp During Billing Period (C)")
+                                ylab("Average Daily EUI (kWh/ft2)") + xlab("Average Temp During Billing Period (F)")} else {
+
+
+    p <- ggplot(data = temp, aes(x=temp_mean, y=monthly_eui, color = factor(Store)))+
+        geom_point(alpha = 0.7) +
+        theme_minimal() +
+        facet_wrap(~ Group) +
+        theme(legend.position = 'bottom') +
+        geom_smooth(method = 'lm', formula = y ~ poly(x, 2), se=F) +
+        ylab("Average Daily EUI (kWh/ft2)") + xlab("Average Temp During Billing Period (F)")
+                                }
     print(p)
     })
 
@@ -365,21 +390,19 @@ server <- function(input, output){
         print(p)
     })
 
-
 #PCA & kmean clustering tab for cost------------------------
     output$cost_kmeans <- renderPlot({
         df <- na.exclude(df)
         df %>%
-            filter(car_wash == F, Native.Use != 0, Unit == 'kWh') %>%
+            filter( car_wash == F, Native.Use != 0, Unit == 'kWh') %>%
             mutate(open = year(OPEN)) %>%
             mutate(month = month(Start.Date)) %>%
             mutate(year = year(Start.Date)) %>%
+            mutate(Cost = Cost) %>%
             group_by(Store) %>%
-            summarize(annual_cost = mean(Cost),
-                      temp_mean = median(temp_mean),
-                      size = median(Size),year = median(year),
-                      open = median(open)) -> df3
-        df4 <- df3 %>% select(Cost, temp_mean, size, year, open )
+            summarize(ann_cost = mean(Cost),temp_mean = median(temp_mean),
+                      size = median(Size),year = median(year), open= median(open)) -> df3
+        df4 <- df3 %>% select(ann_cost, temp_mean, size, year, open )
         df5 <- df %>% select(Group, Store)
 
 
@@ -413,19 +436,18 @@ server <- function(input, output){
     })
 
 #summary statistics plot------------------------------
-    output$sum_stat_1 <- renderPlot({
+    output$sum_stat_4 <- renderPlot({
         df <- na.exclude(df)
         df %>%
-            filter(car_wash == F, Native.Use != 0, Unit == 'kWh') %>%
-            mutate(open = year(OPEN)) %>%
-            mutate(month = month(Start.Date)) %>%
-            mutate(year = year(Start.Date)) %>%
+            filter( car_wash == F, Native.Use != 0, Unit=='kWh') %>%
+            mutate(open= year(OPEN)) %>%
+            mutate(month= month(Start.Date)) %>%
+            mutate(year= year(Start.Date)) %>%
+            mutate(Cost = Cost) %>%
             group_by(Store) %>%
-            summarize(ann_native_use = mean(Native.Use),
-                      temp_mean = median(temp_mean),
-                      size = median(Size),year = median(year),
-                      open = median(open)) -> df3
-        df4 <- df3 %>% select(ann_native_use, temp_mean, size, year, open )
+            summarize(ann_cost = mean(Cost),temp_mean = median(temp_mean),
+                      size = median(Size),year= median(year), open= median(open)) -> df3
+        df4 <- df3 %>% select(ann_cost, temp_mean, size, year, open )
         df5 <- df %>% select(Group, Store)
 
 
@@ -444,30 +466,29 @@ server <- function(input, output){
         pca_x <- as.data.frame(pca_x)
         pca_x <- cbind(pca_x , df4$Group, df4$Store)
 
-        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_1,
+        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_2,
                      iter.max = 100, nstart = 10)
 
         pca_x$class <- km$cluster
         df4$class <- km$cluster
 
-        p <- ggplot(df4, aes(x = ann_native_use)) + geom_histogram(bins = 10) + facet_grid(.~class)
+        p <- ggplot(df4, aes(x = ann_cost)) + geom_histogram(bins = 10) + facet_grid(.~class)
         print(p)
     })
 
 #summary statistics plot------------------------------
-    output$sum_stat_2 <- renderPlot({
+    output$sum_stat_5 <- renderPlot({
         df <- na.exclude(df)
         df %>%
-            filter(car_wash == F, Native.Use != 0, Unit == 'kWh') %>%
-            mutate(open = year(OPEN)) %>%
-            mutate(month = month(Start.Date)) %>%
-            mutate(year = year(Start.Date)) %>%
+            filter( car_wash == F, Native.Use != 0, Unit=='kWh') %>%
+            mutate(open= year(OPEN)) %>%
+            mutate(month= month(Start.Date)) %>%
+            mutate(year= year(Start.Date)) %>%
+            mutate(Cost = Cost) %>%
             group_by(Store) %>%
-            summarize(ann_native_use = mean(Native.Use),
-                      temp_mean = median(temp_mean),
-                      size = median(Size),year = median(year),
-                      open = median(open)) -> df3
-        df4 <- df3 %>% select(ann_native_use, temp_mean, size, year, open )
+            summarize(ann_cost = mean(Cost),temp_mean = median(temp_mean),
+                      size = median(Size),year= median(year), open= median(open)) -> df3
+        df4 <- df3 %>% select(ann_cost, temp_mean, size, year, open )
         df5 <- df %>% select(Group, Store)
 
 
@@ -486,7 +507,7 @@ server <- function(input, output){
         pca_x <- as.data.frame(pca_x)
         pca_x <- cbind(pca_x , df4$Group, df4$Store)
 
-        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_1,
+        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_2,
                      iter.max = 100, nstart = 10)
 
         pca_x$class <- km$cluster
@@ -497,19 +518,18 @@ server <- function(input, output){
     })
 
 #summary statistics plot------------------------------
-    output$sum_stat_3 <- renderPlot({
+    output$sum_stat_6 <- renderPlot({
         df <- na.exclude(df)
         df %>%
-            filter(car_wash == F, Native.Use != 0, Unit == 'kWh') %>%
-            mutate(open = year(OPEN)) %>%
-            mutate(month = month(Start.Date)) %>%
-            mutate(year = year(Start.Date)) %>%
+            filter( car_wash == F, Native.Use != 0, Unit=='kWh') %>%
+            mutate(open= year(OPEN)) %>%
+            mutate(month= month(Start.Date)) %>%
+            mutate(year= year(Start.Date)) %>%
+            mutate(Cost = Cost) %>%
             group_by(Store) %>%
-            summarize(ann_native_use = mean(Native.Use),
-                      temp_mean = median(temp_mean),
-                      size = median(Size),year = median(year),
-                      open = median(open)) -> df3
-        df4 <- df3 %>% select(ann_native_use, temp_mean, size, year, open )
+            summarize(ann_cost = mean(Cost),temp_mean = median(temp_mean),
+                      size = median(Size),year= median(year), open= median(open)) -> df3
+        df4 <- df3 %>% select(ann_cost, temp_mean, size, year, open )
         df5 <- df %>% select(Group, Store)
 
 
@@ -528,7 +548,7 @@ server <- function(input, output){
         pca_x <- as.data.frame(pca_x)
         pca_x <- cbind(pca_x , df4$Group, df4$Store)
 
-        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_1,
+        km <- kmeans(subset(pca_x, select = c(PC1, PC2)), input$kmeans_num_2,
                      iter.max = 100, nstart = 10)
 
         pca_x$class <- km$cluster
